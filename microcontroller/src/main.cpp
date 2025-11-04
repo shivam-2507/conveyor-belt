@@ -65,62 +65,6 @@ int timer(float distanceCm)
   return timeInMilliseconds;
 }
 
-// Watchdog task running in parallel
-void distanceWatchdogTask(void *parameter)
-{
-  while (true)
-  {
-    float currentDistance;
-    unsigned long currentTime = millis();
-    
-    // Safely read the distance value
-    xSemaphoreTake(distanceMutex, portMAX_DELAY);
-    currentDistance = distanceCm;
-    xSemaphoreGive(distanceMutex);
-    
-    // Check if distance is greater than threshold
-    if (currentDistance > DISTANCE_THRESHOLD)
-    {
-      if (!distanceWatchdogActive)
-      {
-        // First time exceeding threshold, start timer
-        distanceWatchdogActive = true;
-        lastGoodDistanceTime = currentTime;
-        Serial.println("⚠️ Distance > 10cm - Watchdog timer started");
-      }
-      else
-      {
-        // Check if timeout exceeded
-        unsigned long elapsedTime = currentTime - lastGoodDistanceTime;
-        if (elapsedTime >= DISTANCE_TIMEOUT)
-        {
-          Serial.println("❌ Distance > 10cm for 5 seconds! Resetting ESP32...");
-          delay(100); // Give time for serial to print
-          ESP.restart(); // Reset the microcontroller
-        }
-        else
-        {
-          // Print countdown
-          Serial.print("⏱️ Distance watchdog: ");
-          Serial.print((DISTANCE_TIMEOUT - elapsedTime) / 1000.0, 1);
-          Serial.println(" seconds remaining");
-        }
-      }
-    }
-    else
-    {
-      // Distance is within safe range, reset watchdog
-      if (distanceWatchdogActive)
-      {
-        Serial.println("✅ Distance back to safe range - Watchdog reset");
-        distanceWatchdogActive = false;
-      }
-    }
-    
-    delay(100); // Check every 100ms
-  }
-}
-
 void loop()
 {
   esp_task_wdt_reset();
