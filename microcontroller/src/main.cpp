@@ -2,9 +2,8 @@
 #include <esp_task_wdt.h>
 
 // Watchdog timer timeout in seconds
-#define WDT_TIMEOUT 10
+#define WDT_TIMEOUT 5
 #define DISTANCE_THRESHOLD 10.0
-#define DISTANCE_TIMEOUT 5000 // 5 seconds in milliseconds
 
 const int trigPin = 5;
 const int echoPin = 12;
@@ -17,18 +16,13 @@ long duration;
 float distanceCm;
 float distanceInch;
 
-// Watchdog variables
-unsigned long lastGoodDistanceTime = 0;
-bool distanceWatchdogActive = false;
-SemaphoreHandle_t distanceMutex;
-
 void setup()
 {
   Serial.begin(115200);     // Starts the serial communication
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
   pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
 
-  // Initialize the watchdog timer
+  // MAYBE GET RID OF THIS
   Serial.println("Configuring WDT...");
   esp_task_wdt_init(WDT_TIMEOUT, true); // Enable panic so ESP32 restarts
   esp_task_wdt_add(NULL);               // Add current thread to WDT watch
@@ -83,6 +77,8 @@ void loop()
 
   Serial.print("Distance (cm): ");
   Serial.println(distanceCm);
+  // Serial.print("Distance (inch): ");
+  // Serial.println(distanceInch);
 
   delay(1000);
 }
