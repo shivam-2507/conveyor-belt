@@ -45,8 +45,9 @@ void *timer2(void *args)
       if(current_time - timer2_start > 3000) // 3 seconds
       {
         unsigned long elapsed = timer1_start - timer2_start;
-        Serial.print("Object detection time: ");
+        Serial.print("\n\nObject detection time: ");
         Serial.println(elapsed);
+        Serial.print("\n\n");
       }
     }
   }
@@ -88,5 +89,6 @@ void loop()
     watchdog_kicked = true;
     timer2_start = millis();
     pthread_mutex_unlock(&mutex);
+    Serial.println("Timer2 started");
   }
 }
