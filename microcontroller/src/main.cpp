@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <esp_task_wdt.h>
+#include <pthread.h>
 
 // Watchdog timer timeout in seconds
 #define WDT_TIMEOUT 5
@@ -15,6 +15,12 @@ const int echoPin = 12;
 long duration;
 float distanceCm;
 float distanceInch;
+bool watchdog_kicked = false;
+pthread_mutex_t mutex;
+pthread_t tid;
+unsigned long timer1 = 0;
+unsigned long timer2 = 0;
+
 
 void setup()
 {
@@ -29,39 +35,23 @@ void setup()
   Serial.println("WDT configured successfully!");
 }
 
-bool watchDog(float distanceCm)
-{
-
-  if (distanceCm > 10)
-  {
-    return true;
-  }
-
-  return false;
+void create_threads(){
+  pthread_create( &tid, NULL, timer2, NULL);
 }
 
-int timer(float distanceCm)
-{
-  int timeInMilliseconds = 0;
+// timer2
+void *timer2(void * args){
 
-  if (distanceCm < 5)
-  {
-    timeInMilliseconds++;
-    delay(1);
+  while(1){
+    if(watchdog_kicked = true)
   }
+  unsigned long current_time = millis();
 
-  if (!watchDog(distanceCm))
-  {
-    Serial.println("Something went wrong!");
-    return -1;
-  }
 
-  return timeInMilliseconds;
+
 }
 
-void loop()
-{
-  esp_task_wdt_reset();
+float readDistance(){
 
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
@@ -73,12 +63,52 @@ void loop()
 
   distanceCm = duration * SOUND_SPEED / 2;
 
-  distanceInch = distanceCm * CM_TO_INCH;
-
   Serial.print("Distance (cm): ");
   Serial.println(distanceCm);
-  // Serial.print("Distance (inch): ");
-  // Serial.println(distanceInch);
 
-  delay(1000);
+  return distanceCm;
+}
+
+
+// watchdog helper function
+void watchdog_kicking(void){
+  watchdog_kicked = true;
+  if(distanceCm > 10 && time > 3){
+
+  }
+  return;
+}
+
+//timer 1
+int timer1(float distanceCm)
+{
+  timer1 = millis();
+
+  if(distance > 5){
+    pthread_mutex_lock(&mutex);
+    watchdog_kicked = true;
+    pthread_mutex_unlock(&mutex);
+  } 
+  
+  unsigned long current_time = millis();
+  timer1 = current_time - timer1;
+  return timer1;
+
+
+}
+
+
+//ending the project showcase
+void end_loop(){
+  pthread_join( &tid, NULL);
+
+  pthread_mutex_destroy(&mutex);
+  return;
+}
+
+
+
+void loop()
+{
+
 }
