@@ -1,8 +1,16 @@
 #include <Arduino.h>
-#include <pthread.h>
 
 const int trigPin = 5;
 const int echoPin = 12;
+
+int motor1Pin1 = 27;
+int motor1Pin2 = 26;
+int enable1Pin = 14;
+
+const int freq = 30000;
+const int pwmChannel = 0;
+const int resolution = 8;
+int dutyCycle = 200;
 
 // define sound speed in cm/uS
 #define SOUND_SPEED 0.034
@@ -11,62 +19,109 @@ const int echoPin = 12;
 long duration;
 float distanceCm;
 float distanceInch;
-bool watchdog_kicked = false;
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_t tid;
+SemaphoreHandle_t mutex;
 
 unsigned long timer1_start = 0;
 unsigned long timer2_start = 0;
+bool timer1_active = false;
+bool timer2_active = false;
 
-void *timer2(void *args)
+// Motor control task - runs continuously forever
+void motorTask(void *parameter)
 {
   while (true)
   {
-    pthread_mutex_lock(&mutex);
-    bool kicked = watchdog_kicked;
-    pthread_mutex_unlock(&mutex);
+    // Move motor forward continuously
+    digitalWrite(motor1Pin1, LOW);
+    digitalWrite(motor1Pin2, HIGH);
+    ledcWrite(pwmChannel, dutyCycle);
 
-    if (kicked == true)
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+// Timer2 watchdog task - monitors if distance > 5 for more than 3 seconds
+void timer2Task(void *parameter)
+{
+  while (true)
+  {
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    bool t2_active = timer2_active;
+    unsigned long t2_start = timer2_start;
+    unsigned long t1_start = timer1_start;
+    xSemaphoreGive(mutex);
+
+    if (t2_active)
     {
-      unsigned long start_time = millis();
-      while(1){
+      unsigned long elapsed = millis() - t2_start;
 
-        if((millis() - start_time) > 3000)
-        {
-          Serial.print("Object is not there anymore\n");
+      if (elapsed >= 3000) // 3 seconds
+      {
+        // Calculate time difference: timer2 - timer1
+        unsigned long time_diff = t2_start - t1_start;
 
-          unsigned long elapsed = start_time - timer1_start;
-          
-          Serial.print("\n\nObject detection time: ");
-          Serial.println(elapsed);
-          Serial.print("\n\n");
+        Serial.println("\n========================================");
+        Serial.print("⏱️  Object detection time: ");
+        Serial.print(time_diff);
+        Serial.println(" ms");
+        Serial.println("========================================\n");
 
-          break;
-
-        }
+        // Reset timers
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        timer1_active = false;
+        timer2_active = false;
+        timer1_start = 0;
+        timer2_start = 0;
+        xSemaphoreGive(mutex);
       }
     }
-  }
 
-  return NULL;
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
 }
 
 void setup()
 {
-  Serial.begin(115200);     // Starts the serial communication
-  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
-  pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
 
-  pthread_create(&tid, NULL, timer2, NULL);
+  pinMode(motor1Pin1, OUTPUT);
+  pinMode(motor1Pin2, OUTPUT);
+  pinMode(enable1Pin, OUTPUT);
 
-  delay(10000);
-  pthread_join(tid, NULL);
-  pthread_mutex_destroy(&mutex);
+  // Configure PWM
+  ledcSetup(pwmChannel, freq, resolution);
+  ledcAttachPin(enable1Pin, pwmChannel);
 
+  // Create FreeRTOS mutex
+  mutex = xSemaphoreCreateMutex();
+
+  // Create motor task - runs forever
+  xTaskCreatePinnedToCore(
+      motorTask,
+      "MotorTask",
+      2048,
+      NULL,
+      1,
+      NULL,
+      0);
+
+  // Create timer2 watchdog task
+  xTaskCreatePinnedToCore(
+      timer2Task,
+      "Timer2Task",
+      4096,
+      NULL,
+      1,
+      NULL,
+      0);
+
+  Serial.println("✅ System initialized");
+  Serial.println("✅ Motor running continuously");
+  Serial.println("✅ Timer tasks ready");
 }
-
-// timer2 for the watchdog thread
 
 float readDistance()
 {
@@ -78,8 +133,6 @@ float readDistance()
 
   duration = pulseIn(echoPin, HIGH);
   distanceCm = duration * SOUND_SPEED / 2;
-  Serial.print("Distance (cm): ");
-  Serial.println(distanceCm);
 
   return distanceCm;
 }
@@ -88,25 +141,36 @@ void loop()
 {
   distanceCm = readDistance();
 
-  // we start timer1 when object detected
-  if(distanceCm < 3 && timer1_start == 0 ) 
+  Serial.print("Distance (cm): ");
+  Serial.println(distanceCm);
+
+  xSemaphoreTake(mutex, portMAX_DELAY);
+  bool t1_active = timer1_active;
+  bool t2_active = timer2_active;
+  xSemaphoreGive(mutex);
+
+  // Logic: If distance < 5, start timer1
+  if (distanceCm < 5 && !t1_active)
   {
+    xSemaphoreTake(mutex, portMAX_DELAY);
     timer1_start = millis();
-    Serial.println("Timer1 started");
+    timer1_active = true;
+    xSemaphoreGive(mutex);
+
+    Serial.println("🟢 Timer1 started - Object detected!");
   }
 
-  // we keep looping watchdog to be NOT kicked
-  if(distanceCm < 3)
+  // Logic: If distance > 5 AND timer1 is active, start timer2 and show warning
+  if (distanceCm > 5 && t1_active && !t2_active)
   {
-    watchdog_kicked = false;
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    timer2_start = millis();
+    timer2_active = true;
+    xSemaphoreGive(mutex);
+
+    Serial.println("⚠️  WARNING: Distance exceeded 5cm - Timer2 started!");
+    Serial.println("⏳ Monitoring for 3 seconds...");
   }
 
-  // Kick watchdog if distance > 5 during detection 
-  if(distanceCm > 5 && timer1_start != 0)
-  { 
-    pthread_mutex_lock(&mutex);
-    watchdog_kicked = true; 
-    pthread_mutex_unlock(&mutex);
-  }
-
+  delay(100);
 }
