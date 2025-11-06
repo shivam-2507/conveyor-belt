@@ -42,8 +42,6 @@ void *timer2(void *args)
           Serial.println(elapsed);
           Serial.print("\n\n");
 
-          pthread_mutex_destroy(&mutex);
-
         }
       }
     }
@@ -83,27 +81,6 @@ float readDistance()
 
 void loop()
 {
-  distanceCm = readDistance();
-
-  // we start timer1 when object detected
-  if(distanceCm < 3 && timer1_start == 0 ) 
-  {
-    timer1_start = millis();
-    Serial.println("Timer1 started");
-  }
-
-  // we keep looping watchdog to be NOT kicked
-  if(distanceCm < 3)
-  {
-    watchdog_kicked = false;
-  }
-
-  // Kick watchdog if distance > 5 during detection 
-  if(distanceCm > 5 && timer1_start != 0)
-  { 
-    pthread_mutex_lock(&mutex);
-    watchdog_kicked = true; 
-    pthread_mutex_unlock(&mutex);
-  }
+    distanceCm = readDistance();
 
 }
