@@ -40,10 +40,10 @@ while (millis() - curr_time <= 3000) {
     Serial.print("\n\n");
 
     // Reset after reporting
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    watchdog_kicked = false;
-    timer1_start = 0; // re-arm for next detection
-    xSemaphoreGive(mutex);
+    // xSemaphoreTake(mutex, portMAX_DELAY);
+    // watchdog_kicked = false;
+    // timer1_start = 0; // re-arm for next detection
+    // xSemaphoreGive(mutex);
   }
 }
 }
