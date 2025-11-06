@@ -10,7 +10,7 @@ int enable1Pin = 14;
 const int freq = 30000;
 const int pwmChannel = 0;
 const int resolution = 8;
-int dutyCycle = 200;
+int dutyCycle = 255; // Medium speed (~60% of max)
 
 // define sound speed in cm/uS
 #define SOUND_SPEED 0.034
