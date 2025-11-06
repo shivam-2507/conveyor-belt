@@ -37,7 +37,7 @@ void timer2Task(void *parameter)
         Serial.print("\n\nObject detection time: ");
         Serial.println(elapsed);
         Serial.print("\n\n");
-
+        
         // Reset after reporting
         xSemaphoreTake(mutex, portMAX_DELAY);
         watchdog_kicked = false;
@@ -60,13 +60,13 @@ void setup()
 
   // Create FreeRTOS task pinned to Core 0
   xTaskCreatePinnedToCore(
-      timer2Task,   // Task function
-      "Timer2Task", // Task name
-      4096,         // Stack size (bytes) - increased for safety
-      NULL,         // Parameters
-      1,            // Priority (1 = low, higher number = higher priority)
-      NULL,         // Task handle
-      0             // Core 0 (main loop runs on Core 1)
+      timer2Task,        // Task function
+      "Timer2Task",      // Task name
+      4096,              // Stack size (bytes) - increased for safety
+      NULL,              // Parameters
+      1,                 // Priority (1 = low, higher number = higher priority)
+      NULL,              // Task handle
+      0                  // Core 0 (main loop runs on Core 1)
   );
 
   Serial.println("✅ FreeRTOS task created on Core 0");
