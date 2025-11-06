@@ -13,7 +13,7 @@ float distanceCm;
 float distanceInch;
 bool watchdog_kicked = false;
 
-pthread_mutex_t mutex;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t tid;
 
 unsigned long timer1_start = 0;
@@ -42,7 +42,6 @@ void *timer2(void *args)
           Serial.println(elapsed);
           Serial.print("\n\n");
 
-          pthread_mutex_destroy(&mutex);
           break;
 
         }
@@ -59,9 +58,12 @@ void setup()
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
   pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
 
-  pthread_mutex_init(&mutex, NULL);
-
   pthread_create(&tid, NULL, timer2, NULL);
+
+  delay(10000);
+  pthread_join(tid, NULL);
+  pthread_mutex_destroy(&mutex);
+
 }
 
 // timer2 for the watchdog thread
