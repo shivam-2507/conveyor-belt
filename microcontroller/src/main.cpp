@@ -28,24 +28,26 @@ void timer2Task(void *parameter)
     unsigned long t1_start = timer1_start;
     xSemaphoreGive(mutex); // Unlock
 
-    if (kicked == true)
+    if (watchdog_kicked == true)
     {
-      unsigned long current_time = millis();
-      if (current_time - t2_start > 3000) // 3 seconds
-      {
-        unsigned long elapsed = t1_start - t2_start;
-        Serial.print("\n\nObject detection time: ");
-        Serial.println(elapsed);
-        Serial.print("\n\n");
-        
-        // Reset after reporting
-        xSemaphoreTake(mutex, portMAX_DELAY);
-        watchdog_kicked = false;
-        xSemaphoreGive(mutex);
-      }
-    }
 
-    vTaskDelay(100 / portTICK_PERIOD_MS); // 👈 IMPORTANT: Check every 100ms (prevents CPU hogging)
+      unsigned long curr_time = millis();
+      while (millis() - curr_time <= 3000)
+      {
+        vTaskDelay(pdMS_TO_TICKS(10)); // yield so we don't hog the CPU
+      }
+      // Use t2_start (captured in loop) minus t1_start for elapsed time
+      unsigned long elapsed = t2_start - t1_start;
+      Serial.print("\n\nObject detection time: ");
+      Serial.println(elapsed);
+      Serial.print("\n\n");
+
+      // Reset after reporting
+      // xSemaphoreTake(mutex, portMAX_DELAY);
+      // watchdog_kicked = false;
+      // timer1_start = 0; // re-arm for next detection
+      // xSemaphoreGive(mutex);
+    }
   }
 }
 
@@ -60,13 +62,13 @@ void setup()
 
   // Create FreeRTOS task pinned to Core 0
   xTaskCreatePinnedToCore(
-      timer2Task,        // Task function
-      "Timer2Task",      // Task name
-      4096,              // Stack size (bytes) - increased for safety
-      NULL,              // Parameters
-      1,                 // Priority (1 = low, higher number = higher priority)
-      NULL,              // Task handle
-      0                  // Core 0 (main loop runs on Core 1)
+      timer2Task,   // Task function
+      "Timer2Task", // Task name
+      4096,         // Stack size (bytes) - increased for safety
+      NULL,         // Parameters
+      1,            // Priority (1 = low, higher number = higher priority)
+      NULL,         // Task handle
+      0             // Core 0 (main loop runs on Core 1)
   );
 
   Serial.println("✅ FreeRTOS task created on Core 0");
@@ -108,7 +110,7 @@ void loop()
     watchdog_kicked = true;
     timer2_start = millis();
     xSemaphoreGive(mutex);
-    Serial.println("Timer2 started (watchdog kicked)");
+    Serial.println("Watchdog Kicked!");
   }
 
   delay(100); // Check every 100ms
