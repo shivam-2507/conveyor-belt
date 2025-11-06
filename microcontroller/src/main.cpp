@@ -20,12 +20,19 @@ unsigned long timer2_start = 0;
 // FreeRTOS task (replaces pthread function)
 void timer2Task(void *parameter)
 {
+  while(true){
+  xSemaphoreTake(mutex, portMAX_DELAY); // Lock 
+  bool kicked = watchdog_kicked; 
+  unsigned long t2_start = timer2_start; 
+  unsigned long t1_start = timer1_start; 
+  xSemaphoreGive(mutex); // Unlock
+
 if(watchdog_kicked == true){
-unsigned long t_wait_start = millis();
-while (millis() - t_wait_start <= 3000) {
+
+unsigned long curr_time = millis();
+while (millis() - curr_time <= 3000) {
   vTaskDelay(pdMS_TO_TICKS(10)); // yield so we don't hog the CPU
 }
-
     // Use t2_start (captured in loop) minus t1_start for elapsed time
     unsigned long elapsed = t2_start - t1_start;
     Serial.print("\n\nObject detection time: ");
@@ -37,8 +44,8 @@ while (millis() - t_wait_start <= 3000) {
     watchdog_kicked = false;
     timer1_start = 0; // re-arm for next detection
     xSemaphoreGive(mutex);
-
   }
+}
 }
 
 void setup()
