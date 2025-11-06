@@ -31,9 +31,9 @@ void timer2Task(void *parameter)
     if (kicked == true)
     {
       unsigned long current_time = millis();
-      if (current_time - t2_start > 3000) // 3 seconds
-      {
-        unsigned long elapsed = t1_start - t2_start;
+      while(1){
+        if((millis() - current_time)> 3000){  
+        unsigned long elapsed = current_time - t1_start;
         Serial.print("\n\nObject detection time: ");
         Serial.println(elapsed);
         Serial.print("\n\n");
@@ -42,6 +42,8 @@ void timer2Task(void *parameter)
         xSemaphoreTake(mutex, portMAX_DELAY);
         watchdog_kicked = false;
         xSemaphoreGive(mutex);
+        }
+
       }
     }
 
@@ -108,7 +110,7 @@ void loop()
     watchdog_kicked = true;
     timer2_start = millis();
     xSemaphoreGive(mutex);
-    Serial.println("Timer2 started (watchdog kicked)");
+    Serial.println("Watchdog Kicked!");
   }
 
   delay(100); // Check every 100ms
