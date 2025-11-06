@@ -1,5 +1,8 @@
 #include <Arduino.h>
 
+const float ROLLER_DIAMETER = 2.0; // cm (adjust to your roller size)
+const float MOTOR_RPM = 11760.0;   // RPM at current duty cycle (150/255 * 20000)
+
 const int trigPin = 5;
 const int echoPin = 12;
 
@@ -26,6 +29,43 @@ unsigned long timer1_start = 0;
 unsigned long timer2_start = 0;
 bool timer1_active = false;
 bool timer2_active = false;
+
+// Data structure for measurements
+struct MeasurementData
+{
+  unsigned long timestamp;    // Time in milliseconds
+  unsigned long time_diff_ms; // Time difference (timer2 - timer1)
+  float length_cm;            // Calculated length in cm
+  float rpm;                  // Motor RPM
+};
+
+// Function to calculate belt length
+float calculateLength(unsigned long time_diff_ms, float rpm, float diameter)
+{
+  // L = (π * diameter * rpm / 60) * time_seconds
+  float time_seconds = time_diff_ms / 1000.0;
+  float circumference = 3.14159 * diameter;        // cm
+  float belt_speed = (circumference * rpm) / 60.0; // cm/s
+  float length = belt_speed * time_seconds;        // cm
+  return length;
+}
+
+// Function to send data to Python script via Serial
+void sendDataToPython(MeasurementData data)
+{
+  // Send as JSON format for easy parsing
+  Serial.println("DATA_START");
+  Serial.print("{\"timestamp\":");
+  Serial.print(data.timestamp);
+  Serial.print(",\"time_diff_ms\":");
+  Serial.print(data.time_diff_ms);
+  Serial.print(",\"length_cm\":");
+  Serial.print(data.length_cm, 2);
+  Serial.print(",\"rpm\":");
+  Serial.print(data.rpm, 0);
+  Serial.println("}");
+  Serial.println("DATA_END");
+}
 
 // Motor control task - runs continuously forever
 void motorTask(void *parameter)
@@ -61,11 +101,28 @@ void timer2Task(void *parameter)
         // Calculate time difference: timer2 - timer1
         unsigned long time_diff = t2_start - t1_start;
 
+        // Calculate length using the formula: L = (π * diameter * rpm / 60) * time
+        float length = calculateLength(time_diff, MOTOR_RPM, ROLLER_DIAMETER);
+
+        // Create measurement data struct
+        MeasurementData measurement;
+        measurement.timestamp = millis();
+        measurement.time_diff_ms = time_diff;
+        measurement.length_cm = length;
+        measurement.rpm = MOTOR_RPM;
+
+        // Display results
         Serial.println("\n========================================");
         Serial.print("⏱️  Object detection time: ");
         Serial.print(time_diff);
         Serial.println(" ms");
+        Serial.print("📏 Calculated belt length: ");
+        Serial.print(length, 2);
+        Serial.println(" cm");
         Serial.println("========================================\n");
+
+        // Send data to Python script
+        sendDataToPython(measurement);
 
         // Reset timers
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -98,7 +155,6 @@ void setup()
   // Create FreeRTOS mutex
   mutex = xSemaphoreCreateMutex();
 
-  // Create motor task - runs forever
   xTaskCreatePinnedToCore(
       motorTask,
       "MotorTask",
@@ -108,7 +164,6 @@ void setup()
       NULL,
       0);
 
-  // Create timer2 watchdog task
   xTaskCreatePinnedToCore(
       timer2Task,
       "Timer2Task",
