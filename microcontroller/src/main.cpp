@@ -41,13 +41,20 @@ void *timer2(void *args)
     
     if(kicked == true)
     {
-      unsigned long current_time = millis();
-      if(current_time - timer2_start > 3000) // 3 seconds
-      {
-        unsigned long elapsed = timer1_start - timer2_start;
-        Serial.print("\n\nObject detection time: ");
-        Serial.println(elapsed);
-        Serial.print("\n\n");
+      unsigned long start_time = millis();
+      while(1){
+
+        if((millis() - start_time) > 3000)
+        {
+          Serial.print("Object is not there anymore\n");
+
+          unsigned long elapsed = start_time - timer1_start;
+          
+          Serial.print("\n\nObject detection time: ");
+          Serial.println(elapsed);
+          Serial.print("\n\n");
+
+        }
       }
     }
   }
@@ -76,19 +83,23 @@ void loop()
   distanceCm = readDistance();
   
   // we start timer1 when object detected
-  if(distanceCm < 3 && timer1_start == 0)
+  if(distance < 3 && timer1_start == 0 ) 
   {
     timer1_start = millis();
     Serial.println("Timer1 started");
   }
-  
-  // Kick watchdog if distance > 5 during detection --> to let the thread know check timer2
-  if(distanceCm > 5 && timer1_start != 0)
+
+  // we keep looping watchdog to be NOT kicked
+  if(distanceCm < 3)
   {
+    watchdog_kicked = false;
+  }
+
+  // Kick watchdog if distance > 5 during detection 
+  if(distanceCm > 5 && timer1_start != 0)
+  { 
     pthread_mutex_lock(&mutex);
-    watchdog_kicked = true;
-    timer2_start = millis();
+    watchdog_kicked = true; 
     pthread_mutex_unlock(&mutex);
-    Serial.println("Timer2 started");
   }
 }
