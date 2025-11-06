@@ -43,6 +43,7 @@ void *timer2(void *args)
           Serial.print("\n\n");
 
           pthread_mutex_destroy(&mutex);
+          break;
 
         }
       }
