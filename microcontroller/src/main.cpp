@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-const float ROLLER_DIAMETER = 2.0; // cm (adjust to your roller size)
-const float MOTOR_RPM = 11760.0;   // RPM at current duty cycle (150/255 * 20000)
+const float ROLLER_DIAMETER = 20.0; // mm (20mm = 2.0cm, but using 20 for correct calculation)
+const float MOTOR_RPM = 5;          // RPM at current duty cycle
 
 const int trigPin = 5;
 const int echoPin = 12;
@@ -60,9 +60,9 @@ void sendDataToPython(MeasurementData data)
   Serial.print(",\"time_diff_ms\":");
   Serial.print(data.time_diff_ms);
   Serial.print(",\"length_cm\":");
-  Serial.print(data.length_cm, 2);
+  Serial.print(data.length_cm, 6); // 6 decimal places for precision
   Serial.print(",\"rpm\":");
-  Serial.print(data.rpm, 0);
+  Serial.print(data.rpm, 2); // 2 decimal places for RPM
   Serial.println("}");
   Serial.println("DATA_END");
 }
@@ -117,7 +117,7 @@ void timer2Task(void *parameter)
         Serial.print(time_diff);
         Serial.println(" ms");
         Serial.print("📏 Calculated belt length: ");
-        Serial.print(length, 2);
+        Serial.print(length, 6); // 6 decimal places
         Serial.println(" cm");
         Serial.println("========================================\n");
 
