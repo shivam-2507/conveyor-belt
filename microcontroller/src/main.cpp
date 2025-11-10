@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-const float ROLLER_DIAMETER = 20.0; // mm (20mm = 2.0cm, but using 20 for correct calculation)
-const float MOTOR_RPM = 5;          // RPM at current duty cycle
+const float ROLLER_DIAMETER = 20.0; // mm
+const float MOTOR_RPM = 13;         // RPM at current duty cycle
 
 const int trigPin = 5;
 const int echoPin = 12;
@@ -16,11 +16,11 @@ const int resolution = 8;
 int dutyCycle = 255; // Medium speed (~60% of max)
 
 // define sound speed in cm/uS
-#define SOUND_SPEED 0.034
-#define CM_TO_INCH 0.393701
+#define SOUND_SPEED 0.34
+#define MM_TO_INCH 0.0393701
 
 long duration;
-float distanceCm;
+float distanceMm;
 float distanceInch;
 
 SemaphoreHandle_t mutex;
@@ -35,7 +35,7 @@ struct MeasurementData
 {
   unsigned long timestamp;    // Time in milliseconds
   unsigned long time_diff_ms; // Time difference (timer2 - timer1)
-  float length_cm;            // Calculated length in cm
+  float length_mm;            // Calculated length in mm
   float rpm;                  // Motor RPM
 };
 
@@ -44,9 +44,9 @@ float calculateLength(unsigned long time_diff_ms, float rpm, float diameter)
 {
   // L = (π * diameter * rpm / 60) * time_seconds
   float time_seconds = time_diff_ms / 1000.0;
-  float circumference = 3.14159 * diameter;        // cm
-  float belt_speed = (circumference * rpm) / 60.0; // cm/s
-  float length = belt_speed * time_seconds;        // cm
+  float circumference = 3.14159 * diameter;        // mm
+  float belt_speed = (circumference * rpm) / 60.0; // mm/s
+  float length = belt_speed * time_seconds;        // mm
   return length;
 }
 
@@ -59,8 +59,8 @@ void sendDataToPython(MeasurementData data)
   Serial.print(data.timestamp);
   Serial.print(",\"time_diff_ms\":");
   Serial.print(data.time_diff_ms);
-  Serial.print(",\"length_cm\":");
-  Serial.print(data.length_cm, 6); // 6 decimal places for precision
+  Serial.print(",\"length_mm\":");
+  Serial.print(data.length_mm, 6); // 6 decimal places for precision
   Serial.print(",\"rpm\":");
   Serial.print(data.rpm, 2); // 2 decimal places for RPM
   Serial.println("}");
@@ -96,7 +96,7 @@ void timer2Task(void *parameter)
     {
       unsigned long elapsed = millis() - t2_start;
 
-      if (elapsed >= 3000) // 3 seconds
+      if (elapsed >= 5000) // 5 seconds
       {
         // Calculate time difference: timer2 - timer1
         unsigned long time_diff = t2_start - t1_start;
@@ -108,7 +108,7 @@ void timer2Task(void *parameter)
         MeasurementData measurement;
         measurement.timestamp = millis();
         measurement.time_diff_ms = time_diff;
-        measurement.length_cm = length;
+        measurement.length_mm = length;
         measurement.rpm = MOTOR_RPM;
 
         // Display results
@@ -118,7 +118,7 @@ void timer2Task(void *parameter)
         Serial.println(" ms");
         Serial.print("📏 Calculated belt length: ");
         Serial.print(length, 6); // 6 decimal places
-        Serial.println(" cm");
+        Serial.println(" mm");
         Serial.println("========================================\n");
 
         // Send data to Python script
@@ -187,25 +187,25 @@ float readDistance()
   digitalWrite(trigPin, LOW);
 
   duration = pulseIn(echoPin, HIGH);
-  distanceCm = duration * SOUND_SPEED / 2;
+  distanceMm = duration * SOUND_SPEED / 2;
 
-  return distanceCm;
+  return distanceMm;
 }
 
 void loop()
 {
-  distanceCm = readDistance();
+  distanceMm = readDistance();
 
-  Serial.print("Distance (cm): ");
-  Serial.println(distanceCm);
+  Serial.print("Distance (mm): ");
+  Serial.println(distanceMm);
 
   xSemaphoreTake(mutex, portMAX_DELAY);
   bool t1_active = timer1_active;
   bool t2_active = timer2_active;
   xSemaphoreGive(mutex);
 
-  // Logic: If distance < 5, start timer1
-  if (distanceCm < 5 && !t1_active)
+  // Logic: If distance < 50, start timer1
+  if (distanceMm < 50 && !t1_active)
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
     timer1_start = millis();
@@ -215,16 +215,29 @@ void loop()
     Serial.println("🟢 Timer1 started - Object detected!");
   }
 
-  // Logic: If distance > 5 AND timer1 is active, start timer2 and show warning
-  if (distanceCm > 5 && t1_active && !t2_active)
+  // Logic: If distance > 50 AND timer1 is active, start timer2 and show warning
+  if (distanceMm > 50 && t1_active && !t2_active)
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
     timer2_start = millis();
     timer2_active = true;
     xSemaphoreGive(mutex);
 
-    Serial.println("⚠️  WARNING: Distance exceeded 5cm - Timer2 started!");
-    Serial.println("⏳ Monitoring for 3 seconds...");
+    Serial.println("⚠️  WARNING: Distance exceeded 50mm - Timer2 started!");
+    Serial.println("⏳ Monitoring for 5 seconds...");
+  }
+
+  // SPIKE DETECTION: If distance drops back below 50mm while timer2 is running, reset timer2
+  // This prevents spikes from triggering false measurements
+  if (distanceMm < 50 && t2_active)
+  {
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    timer2_active = false;
+    timer2_start = 0;
+    xSemaphoreGive(mutex);
+
+    Serial.println("🔄 SPIKE DETECTED! Timer2 reset - Distance back below 50mm");
+    Serial.println("   Continuing to monitor...");
   }
 
   delay(100);
